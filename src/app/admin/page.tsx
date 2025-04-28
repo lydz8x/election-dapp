@@ -6,17 +6,22 @@ import useUserSession from "../../../hooks/useUserSession";
 import { supabase } from "@/lib/supabase";
 import { v4 as uuidv4 } from "uuid";
 import Image from "next/image";
+import { useWriteContract } from "wagmi";
+import { CONTRACT_ABI, CONTRACT_ADDRESS } from "@/lib/contract/contract";
+import { ethers } from "ethers";
+
+type Candidate = {
+  name: string;
+  vision: string;
+  mission: string;
+  imageFile: File | null;
+};
 
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, loading } = useUserSession();
+  const { writeContract, isPending, isSuccess, error } = useWriteContract();
   const [title, setTitle] = useState("");
-  type Candidate = {
-    name: string;
-    vision: string;
-    mission: string;
-    imageFile: File | null;
-  };
 
   const [candidates, setCandidates] = useState<Candidate[]>([
     { name: "", vision: "", mission: "", imageFile: null },
@@ -55,68 +60,90 @@ export default function AdminDashboard() {
       return;
     }
 
-    const deadline = new Date(Date.now() + duration * 1000).toISOString();
+    try {
+      // Step 1: Prepare bytes32 for blockchain
+      const titleBytes32 = ethers.encodeBytes32String(title);
+      const candidatesBytes32 = candidates.map((c) =>
+        ethers.encodeBytes32String(c.name)
+      );
 
-    // 1. Create election in Supabase
-    const { data: election, error: electionError } = await supabase
-      .from("elections")
-      .insert([{ title, deadline, created_by: user.id }])
-      .select()
-      .single();
+      // Step 2: Call smart contract to create election
+      const txHash = await writeContract({
+        abi: CONTRACT_ABI,
+        address: CONTRACT_ADDRESS,
+        functionName: "createElection",
+        args: [titleBytes32, candidatesBytes32, duration],
+      });
 
-    if (electionError || !election) {
-      console.error(electionError);
-      alert("Failed to create election.");
-      return;
-    }
+      console.log("Transaction hash:", txHash);
+      alert(`Transaction sent!\n\nHash:\n${txHash}`);
 
-    const electionId = election.id;
+      // Show Etherscan link (optional: can also show in page later)
+      console.log(
+        `View transaction: https://sepolia.etherscan.io/tx/${txHash}`
+      );
 
-    // 2. Upload images and insert candidates
-    for (const candidate of candidates) {
-      let image_url = null;
+      // 🧠 wagmi v2: writeContract returns tx hash, not receipt.
+      // Let's wait 10 seconds for confirmation (simple delay).
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
-      if (candidate.imageFile) {
-        const fileExt = candidate.imageFile.name.split(".").pop();
-        const filePath = `${uuidv4()}.${fileExt}`;
+      alert("Transaction likely confirmed! Now uploading profiles...");
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("candidates")
-          .upload(filePath, candidate.imageFile);
+      // Step 3: After blockchain confirmed, upload images and insert into Supabase
+      for (const candidate of candidates) {
+        let image_url = null;
 
-        console.log("Upload successful:", uploadData?.path);
+        if (candidate.imageFile) {
+          const fileExt = candidate.imageFile.name.split(".").pop();
+          const filePath = `${uuidv4()}.${fileExt}`;
 
-        if (uploadError) {
-          console.error(uploadError);
-          alert(`Failed to upload image for ${candidate.name}`);
-          return;
+          const { data: uploadData, error: uploadError } =
+            await supabase.storage
+              .from("candidates")
+              .upload(filePath, candidate.imageFile);
+
+          if (uploadError) {
+            console.error("Upload failed for:", candidate.name, uploadError);
+            alert(`Failed to upload image for ${candidate.name}`);
+            return;
+          }
+
+          console.log("Image uploaded at path:", uploadData?.path);
+
+          image_url = supabase.storage.from("candidates").getPublicUrl(filePath)
+            .data.publicUrl;
         }
 
-        image_url = supabase.storage.from("candidates").getPublicUrl(filePath)
-          .data.publicUrl;
+        const { error: candidateError } = await supabase
+          .from("candidates")
+          .insert({
+            election_title: title,
+            name: candidate.name,
+            vision: candidate.vision,
+            mission: candidate.mission,
+            profile_image_url: image_url,
+          });
+
+        if (candidateError) {
+          console.error(
+            "Failed to insert candidate into Supabase:",
+            candidateError
+          );
+          alert(`Failed to save candidate ${candidate.name} to database`);
+          return;
+        }
       }
 
-      const { error: candidateError } = await supabase
-        .from("candidates")
-        .insert({
-          election_id: electionId,
-          name: candidate.name,
-          vision: candidate.vision,
-          mission: candidate.mission,
-          profile_image_url: image_url,
-        });
+      alert("Election created successfully! 🚀");
 
-      if (candidateError) {
-        console.error(candidateError);
-        alert(`Failed to save candidate: ${candidate.name}`);
-        return;
-      }
+      // Reset form
+      setTitle("");
+      setCandidates([{ name: "", vision: "", mission: "", imageFile: null }]);
+      setDuration(60 * 60);
+    } catch (err) {
+      console.error("Create election failed:", err);
+      alert("Failed to create election on chain.");
     }
-
-    alert("Election created successfully!");
-    setTitle("");
-    setCandidates([{ name: "", vision: "", mission: "", imageFile: null }]);
-    setDuration(60 * 60 * 24);
   };
 
   return (
@@ -206,7 +233,7 @@ export default function AdminDashboard() {
             type="number"
             className="w-full p-2 border rounded-md"
             value={duration / (60 * 60)}
-            onChange={(e) => setDuration(Number(e.target.value) * 60 * 60 * 24)}
+            onChange={(e) => setDuration(Number(e.target.value) * 60 * 60)}
             min={1}
           />
         </div>
@@ -217,6 +244,19 @@ export default function AdminDashboard() {
         >
           Create Election
         </button>
+        <div className="text-sm text-center mt-4">
+          {isPending && (
+            <p className="text-blue-500">Transaction is pending...</p>
+          )}
+          {isSuccess && (
+            <p className="text-green-600">Election created successfully!</p>
+          )}
+          {error && (
+            <p className="text-red-600">
+              Something went wrong during transaction.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

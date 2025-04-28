@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import useUserSession from "../../../hooks/useUserSession";
 import { supabase } from "@/lib/supabase";
 import LogoutButton from "../../../components/LogoutButton";
+import { useWriteContract } from "wagmi";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/lib/contract/contract";
 
 const formatCountdown = (deadline: string) => {
   const now = new Date();
@@ -30,6 +32,7 @@ type Candidate = {
 
 export default function UserDashboard() {
   const { user, loading } = useUserSession();
+  const { writeContract, isPending, isSuccess, error } = useWriteContract();
   const [elections, setElections] = useState<Election[]>([]);
   const [candidates, setCandidates] = useState<Record<string, Candidate[]>>({});
   const [votes, setVotes] = useState<Record<string, number>>({});
@@ -107,16 +110,16 @@ export default function UserDashboard() {
   const handleVote = async (electionId: string, proposalIndex: number) => {
     if (!user) return;
 
-    const { error } = await supabase.from("votes").insert({
-      election_id: electionId,
-      voter_id: user.id,
-      proposal_index: proposalIndex,
-    });
-
-    if (!error) {
-      setVotes((prev) => ({ ...prev, [electionId]: proposalIndex }));
-    } else {
-      alert("Failed to vote: " + error.message);
+    try {
+      writeContract({
+        abi: CONTRACT_ABI,
+        address: CONTRACT_ADDRESS,
+        functionName: "vote",
+        args: [parseInt(electionId), proposalIndex],
+      });
+    } catch (err) {
+      console.error("Smart contract voting failed: ", err);
+      alert("Failed to vote on chain");
     }
   };
 
@@ -191,6 +194,21 @@ export default function UserDashboard() {
                     </div>
                   );
                 })}
+                <div className="col-span-full">
+                  {isPending && (
+                    <p className="text-sm text-blue-500 mt-2">
+                      Waiting for transaction confirmation...
+                    </p>
+                  )}
+                  {isSuccess && (
+                    <p className="text-sm text-green-600 mt-2">
+                      Vote successful! 🎉
+                    </p>
+                  )}
+                  {error && (
+                    <p className="text-sm text-red-600 mt-2">Vote failed. ❌</p>
+                  )}
+                </div>
               </div>
             </div>
           );
