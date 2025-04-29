@@ -20,7 +20,7 @@ type Candidate = {
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, loading } = useUserSession();
-  const { writeContract, isPending, isSuccess, error } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
   const [title, setTitle] = useState("");
 
   const [candidates, setCandidates] = useState<Candidate[]>([
@@ -37,6 +37,7 @@ export default function AdminDashboard() {
 
   if (loading || !user) return <p>Loading...</p>;
 
+  // Add candidate
   const handleAddCandidate = () => {
     setCandidates([
       ...candidates,
@@ -44,6 +45,7 @@ export default function AdminDashboard() {
     ]);
   };
 
+  // Change candidate
   const handleCandidateChange = (
     index: number,
     field: keyof Candidate,
@@ -54,6 +56,7 @@ export default function AdminDashboard() {
     setCandidates(updated);
   };
 
+  // Create election
   const handleCreateElection = async () => {
     if (!title || candidates.some((c) => !c.name)) {
       alert("Please fill in all candidate names and election title.");
@@ -61,14 +64,13 @@ export default function AdminDashboard() {
     }
 
     try {
-      // Step 1: Prepare bytes32 for blockchain
       const titleBytes32 = ethers.encodeBytes32String(title);
       const candidatesBytes32 = candidates.map((c) =>
         ethers.encodeBytes32String(c.name)
       );
 
-      // Step 2: Call smart contract to create election
-      const txHash = await writeContract({
+      // Create election on blockchain
+      const txHash = await writeContractAsync({
         abi: CONTRACT_ABI,
         address: CONTRACT_ADDRESS,
         functionName: "createElection",
@@ -76,20 +78,43 @@ export default function AdminDashboard() {
       });
 
       console.log("Transaction hash:", txHash);
-      alert(`Transaction sent!\n\nHash:\n${txHash}`);
 
-      // Show Etherscan link (optional: can also show in page later)
-      console.log(
-        `View transaction: https://sepolia.etherscan.io/tx/${txHash}`
-      );
-
-      // 🧠 wagmi v2: writeContract returns tx hash, not receipt.
-      // Let's wait 10 seconds for confirmation (simple delay).
+      // Wait transaction confirmation
       await new Promise((resolve) => setTimeout(resolve, 10000));
 
-      alert("Transaction likely confirmed! Now uploading profiles...");
+      // [NEW] Read election count to get latest index
+      const { data: allElections } = await supabase
+        .from("elections")
+        .select("id");
+      const electionIndex = allElections?.length || 0; // Assumes new election is next index
 
-      // Step 3: After blockchain confirmed, upload images and insert into Supabase
+      console.log("Computed election index:", electionIndex);
+
+      // Save election metadata in Supabase
+      const deadline = new Date(Date.now() + duration * 1000).toISOString();
+
+      const { data: electionMeta, error: metaError } = await supabase
+        .from("elections")
+        .insert({
+          title,
+          created_by: user.id,
+          deadline,
+          election_index: electionIndex,
+        })
+        .select()
+        .single(); // ✅ so we get the `id`
+
+      if (metaError) {
+        console.error("Failed to insert election metadata:", metaError);
+        alert("Election created on-chain but failed to save metadata.");
+        return;
+      }
+
+      alert(
+        "Election successfully created! 🚀 Now uploading candidate profiles..."
+      );
+
+      // Upload candidate profiles
       for (const candidate of candidates) {
         let image_url = null;
 
@@ -108,8 +133,6 @@ export default function AdminDashboard() {
             return;
           }
 
-          console.log("Image uploaded at path:", uploadData?.path);
-
           image_url = supabase.storage.from("candidates").getPublicUrl(filePath)
             .data.publicUrl;
         }
@@ -117,7 +140,7 @@ export default function AdminDashboard() {
         const { error: candidateError } = await supabase
           .from("candidates")
           .insert({
-            election_title: title,
+            election_id: electionMeta.id, // ✅ correct FK
             name: candidate.name,
             vision: candidate.vision,
             mission: candidate.mission,
@@ -125,16 +148,13 @@ export default function AdminDashboard() {
           });
 
         if (candidateError) {
-          console.error(
-            "Failed to insert candidate into Supabase:",
-            candidateError
-          );
-          alert(`Failed to save candidate ${candidate.name} to database`);
+          console.error("Failed to insert candidate:", candidateError);
+          alert(`Failed to save candidate ${candidate.name}`);
           return;
         }
       }
 
-      alert("Election created successfully! 🚀");
+      alert("All candidates uploaded successfully!");
 
       // Reset form
       setTitle("");
@@ -153,7 +173,6 @@ export default function AdminDashboard() {
       </h2>
 
       <div className="bg-white rounded-xl shadow p-6 space-y-4 w-full max-w-4xl mx-auto text-blue-600">
-        {/* Title input */}
         <input
           type="text"
           placeholder="Election title"
@@ -162,7 +181,6 @@ export default function AdminDashboard() {
           onChange={(e) => setTitle(e.target.value)}
         />
 
-        {/* Candidates form */}
         {candidates.map((candidate, idx) => (
           <div key={idx} className="p-4 border rounded-lg space-y-2 bg-blue-50">
             <input
@@ -190,12 +208,12 @@ export default function AdminDashboard() {
                 handleCandidateChange(idx, "mission", e.target.value)
               }
             />
-            {/* Profile image preview */}
-            {/* Image preview */}
             {candidate.imageFile && (
               <Image
                 src={URL.createObjectURL(candidate.imageFile)}
                 alt="Preview"
+                width={96}
+                height={96}
                 className="w-24 h-24 object-cover rounded-full border shadow mb-2"
               />
             )}
@@ -244,19 +262,6 @@ export default function AdminDashboard() {
         >
           Create Election
         </button>
-        <div className="text-sm text-center mt-4">
-          {isPending && (
-            <p className="text-blue-500">Transaction is pending...</p>
-          )}
-          {isSuccess && (
-            <p className="text-green-600">Election created successfully!</p>
-          )}
-          {error && (
-            <p className="text-red-600">
-              Something went wrong during transaction.
-            </p>
-          )}
-        </div>
       </div>
     </div>
   );

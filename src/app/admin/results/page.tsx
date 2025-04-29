@@ -2,30 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import useUserSession from "../../../../hooks/useUserSession";
 import { useRouter } from "next/navigation";
+import useUserSession from "../../../../hooks/useUserSession";
+import { CONTRACT_ABI, CONTRACT_ADDRESS } from "@/lib/contract/contract";
+import { getPublicClient } from "wagmi/actions";
+import { ethers } from "ethers";
+import { wagmiConfig } from "@/lib/wallet";
 
 interface Election {
   id: string;
   title: string;
 }
 
-interface Candidate {
-  id: string;
-  name: string;
-}
-
-interface Vote {
-  election_id: string;
-  proposal_index: number;
-}
-
 export default function AdminResultsPage() {
   const router = useRouter();
   const { user, loading } = useUserSession();
   const [elections, setElections] = useState<Election[]>([]);
-  const [candidates, setCandidates] = useState<Record<string, Candidate[]>>({});
-  const [voteCounts, setVoteCounts] = useState<Record<string, number[]>>({});
+  const [selectedElection, setSelectedElection] = useState<string>("");
+  const [winnerName, setWinnerName] = useState<string | null>(null);
+  const publicClient = getPublicClient(wagmiConfig);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
@@ -35,85 +30,74 @@ export default function AdminResultsPage() {
 
     if (!user || user.role !== "admin") return;
 
-    const fetchResults = async () => {
+    const fetchElections = async () => {
       const { data: electionsData } = await supabase
         .from("elections")
         .select("id, title");
 
       setElections((electionsData as Election[]) || []);
-
-      const candidateMap: Record<string, Candidate[]> = {};
-      for (const election of (electionsData as Election[]) || []) {
-        const { data: candData } = await supabase
-          .from("candidates")
-          .select("id, name")
-          .eq("election_id", election.id);
-
-        candidateMap[election.id] = (candData as Candidate[]) || [];
-      }
-      setCandidates(candidateMap);
-
-      const { data: allVotes } = await supabase
-        .from("votes")
-        .select("election_id, proposal_index");
-
-      const countsMap: Record<string, number[]> = {};
-      for (const election of (electionsData as Election[]) || []) {
-        const countArray = new Array(
-          candidateMap[election.id]?.length || 0
-        ).fill(0);
-        ((allVotes as Vote[]) || [])
-          .filter((v) => v.election_id === election.id)
-          .forEach((v) => {
-            countArray[v.proposal_index]++;
-          });
-        countsMap[election.id] = countArray;
-      }
-      setVoteCounts(countsMap);
     };
 
-    fetchResults();
+    fetchElections();
   }, [user, loading, router]);
+
+  const handleViewResult = async () => {
+    if (!selectedElection) return;
+
+    try {
+      const electionIndex = parseInt(selectedElection);
+
+      const encoded = await publicClient.readContract({
+        abi: CONTRACT_ABI,
+        address: CONTRACT_ADDRESS,
+        functionName: "winningName",
+        args: [electionIndex],
+      });
+
+      const decoded = ethers.decodeBytes32String(encoded as string);
+      setWinnerName(decoded);
+    } catch (err) {
+      console.error("Failed to read winning name:", err);
+      alert("Could not fetch winner from blockchain.");
+    }
+  };
 
   if (loading) return <p className="p-4">Loading...</p>;
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
-      <h1 className="text-2xl font-bold text-blue-700 mb-4">Admin Results</h1>
+    <div className="p-6 min-h-screen bg-gray-50 text-blue-700">
+      <h1 className="text-2xl font-bold mb-6">Admin View Results 🏆</h1>
 
-      {elections.map((election) => {
-        const results = voteCounts[election.id] || [];
-        const maxVotes = Math.max(...results);
-        const electionCandidates = candidates[election.id] || [];
+      <div className="space-y-4">
+        <select
+          className="p-2 rounded border w-full"
+          value={selectedElection}
+          onChange={(e) => setSelectedElection(e.target.value)}
+        >
+          <option value="">Select an Election</option>
+          {elections.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.title}
+            </option>
+          ))}
+        </select>
 
-        return (
-          <div
-            key={election.id}
-            className="mb-8 bg-white shadow p-4 rounded-xl"
-          >
-            <h2 className="text-xl font-semibold text-blue-600 mb-2">
-              {election.title}
+        <button
+          disabled={!selectedElection}
+          onClick={handleViewResult}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full"
+        >
+          Show Winner
+        </button>
+
+        {winnerName && (
+          <div className="bg-white shadow p-6 rounded-xl text-center mt-6">
+            <h2 className="text-xl font-semibold text-green-700">
+              🏆 Winner: {winnerName}
             </h2>
-            <ul className="space-y-2 text-blue-700">
-              {electionCandidates.map((cand, index) => (
-                <li
-                  key={cand.id}
-                  className={`flex justify-between items-center p-3 rounded border ${
-                    results[index] === maxVotes && maxVotes > 0
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-200"
-                  }`}
-                >
-                  <span className="font-medium">{cand.name}</span>
-                  <span className="text-sm text-gray-700">
-                    {results[index]} vote{results[index] !== 1 ? "s" : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
-        );
-      })}
+        )}
+      </div>
     </div>
   );
 }

@@ -31,11 +31,11 @@ export default function ConnectWalletButton() {
     <div className="flex items-center gap-2">
       {isConnected ? (
         <>
-          <span>
+          <span className="text-blue-600">
             {address!.slice(0, 6)}...{address!.slice(-4)}
           </span>
           <button
-            className="text-sm px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+            className="text-sm px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             onClick={() => disconnect()}
           >
             Disconnect

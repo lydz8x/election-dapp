@@ -61,7 +61,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <div className="flex-1 bg-gray-50 p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-blue-700">Admin Dashboard</h1>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4">
             <ConnectWalletButton />
             <LogoutButton />
           </div>
