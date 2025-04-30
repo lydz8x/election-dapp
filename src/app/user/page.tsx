@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import useUserSession from "../../../hooks/useUserSession";
 import { supabase } from "@/lib/supabase";
-import LogoutButton from "../../../components/LogoutButton";
 import { useWriteContract, useAccount } from "wagmi";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/lib/contract/contract";
-import ConnectWalletButton from "../../../components/ConnectWalletButton";
 
 const formatCountdown = (deadline: string) => {
   const now = new Date();
@@ -147,14 +145,11 @@ export default function UserDashboard() {
 
   return (
     <div className="min-h-screen p-6 bg-blue-50">
-      <div className="flex justify-between items-center px-6 py-4 rounded-md bg-white shadow-md">
-        <h1 className="text-xl font-bold text-blue-700">User Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <ConnectWalletButton />
-          <LogoutButton />
-        </div>
+      <div className="flex justify-between items-center mt-3">
+        <p className="font-semibold text-blue-600 mt-3">
+          Welcome, {user.email}
+        </p>
       </div>
-      <p className="text-blue-600 mt-3">Welcome, {user.email}</p>
 
       {elections.length === 0 ? (
         <p className="mt-4 text-gray-600">
