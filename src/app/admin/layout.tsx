@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside className="w-64 min-h-screen bg-blue-900 text-white p-6 space-y-4 shadow-md">
-        <h2 className="text-2xl font-bold text-white mb-6">🗳️ Admin Panel</h2>
+        <h2 className="text-2xl font-bold text-white mb-6">Admin Panel</h2>
         <nav className="flex flex-col gap-3 text-sm">
           {navItems.map((item) => (
             <a

@@ -82,7 +82,7 @@ export default function AdminRightsPage() {
 
       console.log("Transaction hash:", txHash);
 
-      // ✅ Save to Supabase
+      // Save to Supabase
       const { error: supaErr } = await supabase.from("voting_rights").insert({
         election_id: selectedElection.id,
         user_id: userId,
@@ -93,7 +93,7 @@ export default function AdminRightsPage() {
         console.error("Failed to insert voting_rights:", supaErr);
         alert("Chain success, but Supabase insert failed.");
       } else {
-        alert("Right granted! ✅");
+        alert("Right granted!");
       }
     } catch (err) {
       console.error("Failed to give right to vote:", err);
@@ -102,37 +102,37 @@ export default function AdminRightsPage() {
   };
 
   // Grant all
-  const handleGrantAll = async () => {
-    if (!selectedElectionId) {
-      alert("Select an election first!");
-      return;
-    }
+  // const handleGrantAll = async () => {
+  //   if (!selectedElectionId) {
+  //     alert("Select an election first!");
+  //     return;
+  //   }
 
-    const selectedElection = elections.find((e) => e.id === selectedElectionId);
-    if (!selectedElection) {
-      alert("Invalid election selected.");
-      return;
-    }
+  //   const selectedElection = elections.find((e) => e.id === selectedElectionId);
+  //   if (!selectedElection) {
+  //     alert("Invalid election selected.");
+  //     return;
+  //   }
 
-    const electionIndex = selectedElection.election_index;
-    if (typeof electionIndex !== "number") {
-      alert("Election index missing.");
-      return;
-    }
+  //   const electionIndex = selectedElection.election_index;
+  //   if (typeof electionIndex !== "number") {
+  //     alert("Election index missing.");
+  //     return;
+  //   }
 
-    for (const user of users) {
-      if (!user.wallet_address) continue;
+  //   for (const user of users) {
+  //     if (!user.wallet_address) continue;
 
-      await writeContractAsync({
-        abi: CONTRACT_ABI,
-        address: CONTRACT_ADDRESS,
-        functionName: "giveRightToVote",
-        args: [electionIndex, user.wallet_address, 1],
-      });
-    }
+  //     await writeContractAsync({
+  //       abi: CONTRACT_ABI,
+  //       address: CONTRACT_ADDRESS,
+  //       functionName: "giveRightToVote",
+  //       args: [electionIndex, user.wallet_address, 1],
+  //     });
+  //   }
 
-    alert("All users granted voting rights!");
-  };
+  //   alert("All users granted voting rights!");
+  // };
 
   return (
     <div className="p-6">
@@ -161,12 +161,12 @@ export default function AdminRightsPage() {
 
       {selectedElectionId ? (
         <>
-          <button
+          {/* <button
             onClick={handleGrantAll}
             className="mb-4 bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded w-full"
           >
-            🚀 Grant Right to All Users
-          </button>
+           Grant Right to All Users
+          </button> */}
 
           <div className="overflow-x-auto bg-white p-4 rounded-lg shadow">
             <table className="w-full table-auto text-sm text-left text-blue-600">

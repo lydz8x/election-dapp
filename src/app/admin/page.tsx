@@ -102,7 +102,7 @@ export default function AdminDashboard() {
           election_index: electionIndex,
         })
         .select()
-        .single(); // ✅ so we get the `id`
+        .single();
 
       if (metaError) {
         console.error("Failed to insert election metadata:", metaError);
@@ -140,7 +140,7 @@ export default function AdminDashboard() {
         const { error: candidateError } = await supabase
           .from("candidates")
           .insert({
-            election_id: electionMeta.id, // ✅ correct FK
+            election_id: electionMeta.id,
             name: candidate.name,
             vision: candidate.vision,
             mission: candidate.mission,

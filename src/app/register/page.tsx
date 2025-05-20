@@ -24,7 +24,7 @@ export default function RegisterPage() {
 
     const { fullName, studentId, email, password } = form;
 
-    // ✅ Sign up with Supabase Auth (no hashing!)
+    // Sign up with Supabase Auth (no hashing!)
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -35,7 +35,7 @@ export default function RegisterPage() {
       return;
     }
 
-    // ✅ Insert into `users` table (no password_hash)
+    // Insert into `users` table (no password_hash)
     const { error: insertError } = await supabase.from("users").insert([
       {
         id: data.user?.id,

@@ -69,7 +69,7 @@ export default function AdminResultsPage() {
 
   return (
     <div className="p-6 min-h-screen bg-gray-50 text-blue-700">
-      <h1 className="text-2xl font-bold mb-6">Admin View Results 🏆</h1>
+      <h1 className="text-2xl font-bold mb-6">Admin View Results</h1>
 
       <div className="space-y-4">
         <select

@@ -146,9 +146,7 @@ export default function UserDashboard() {
   return (
     <div className="min-h-screen p-6 bg-blue-50">
       <div className="flex justify-between items-center mt-3">
-        <p className="font-semibold text-blue-600 mt-3">
-          Welcome, {user.email}
-        </p>
+        <p className="font-semibold text-blue-600 mt-3">Welcome, {user.name}</p>
       </div>
 
       {elections.length === 0 ? (
@@ -189,7 +187,7 @@ export default function UserDashboard() {
                       </p>
                       {isWinner && (
                         <span className="absolute top-2 right-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                          🏆 Leading
+                          Leading
                         </span>
                       )}
                       <button

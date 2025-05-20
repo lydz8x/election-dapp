@@ -69,9 +69,9 @@ export default function AdminApprovalsPage() {
       {pendingUsers.length === 0 ? (
         <p className="text-blue-600">No users waiting for approval.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl shadow bg-white">
+        <div className="overflow-x-auto rounded-xl shadow bg-white text-blue-700">
           <table className="min-w-full table-auto text-sm text-left">
-            <thead className="bg-blue-100 text-blue-700 font-semibold">
+            <thead className="bg-blue-100 font-semibold">
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Student ID</th>
