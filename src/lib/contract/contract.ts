@@ -1,4 +1,4 @@
-export const CONTRACT_ADDRESS = "0x66230eD3AfA3a03773CCA269AcA11c70762158b9";
+export const CONTRACT_ADDRESS = "0xe06691947a6aE80DbAcFb8E7c02C2F0C04533B58";
 
 export const CONTRACT_ABI = [
   {
@@ -224,6 +224,30 @@ export const CONTRACT_ABI = [
         internalType: "bool",
         name: "exists",
         type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "electionIndex",
+        type: "uint256",
+      },
+    ],
+    name: "getProposalVotes",
+    outputs: [
+      {
+        internalType: "bytes32[]",
+        name: "",
+        type: "bytes32[]",
+      },
+      {
+        internalType: "uint256[]",
+        name: "",
+        type: "uint256[]",
       },
     ],
     stateMutability: "view",

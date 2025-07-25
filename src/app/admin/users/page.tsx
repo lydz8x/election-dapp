@@ -115,7 +115,7 @@ export default function AdminUsersPage() {
               <th className="px-4 py-2 text-left">Role</th>
               <th className="px-4 py-2 text-left">Status</th>
               <th className="px-4 py-2 text-left">Wallet</th>
-              <th className="px-4 py-2 text-left">Actions</th>
+              {/* <th className="px-4 py-2 text-left">Actions</th> */}
             </tr>
           </thead>
           <tbody>
@@ -140,14 +140,14 @@ export default function AdminUsersPage() {
                 <td className="px-4 py-2 text-xs break-all">
                   {u.wallet_address || "—"}
                 </td>
-                <td className="px-4 py-2 space-x-2">
+                {/* <td className="px-4 py-2 space-x-2">
                   {u.status !== "approved" && (
                     <button
                       onClick={() => {
                         setSelectedUser(u);
                         setPendingAction("approved");
                       }}
-                      className="text-green-600 hover:underline"
+                      className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
                     >
                       Approve
                     </button>
@@ -163,7 +163,7 @@ export default function AdminUsersPage() {
                       Flag
                     </button>
                   )}
-                </td>
+                </td> */}
               </tr>
             ))}
           </tbody>

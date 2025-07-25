@@ -21,6 +21,9 @@ export default function AdminResultsPage() {
   const [elections, setElections] = useState<Election[]>([]);
   const [selectedElection, setSelectedElection] = useState<string>("");
   const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [proposalVotes, setProposalVotes] = useState<
+    { name: string; votes: number }[]
+  >([]);
   const publicClient = getPublicClient(wagmiConfig);
   const account = getAccount(wagmiConfig);
 
@@ -38,6 +41,7 @@ export default function AdminResultsPage() {
     fetchElections();
   }, [user, loading, router]);
 
+  // View result
   const handleViewResult = async () => {
     if (!selectedElection) return;
 
@@ -54,6 +58,22 @@ export default function AdminResultsPage() {
 
       const decoded = ethers.decodeBytes32String(encoded as string);
       setWinnerName(decoded);
+
+      // Vote count
+      const [rawNames, rawVotes] = (await publicClient.readContract({
+        abi: CONTRACT_ABI,
+        address: CONTRACT_ADDRESS,
+        functionName: "getProposalVotes",
+        args: [electionIndex],
+        account: account.address,
+      })) as [string[], bigint[]];
+
+      const decodedProposalVotes = (rawNames as string[]).map((name, i) => ({
+        name: ethers.decodeBytes32String(name),
+        votes: Number((rawVotes as bigint[])[i]),
+      }));
+
+      setProposalVotes(decodedProposalVotes);
     } catch (err) {
       console.error("Failed to read winning name:", err);
       alert("Could not fetch winner from blockchain.");
@@ -89,11 +109,39 @@ export default function AdminResultsPage() {
             Show Winner
           </button>
 
-          {winnerName && (
-            <div className="bg-white shadow p-6 rounded-xl text-center mt-6">
-              <h2 className="text-xl font-semibold text-green-700">
-                🏆 Winner: {winnerName}
-              </h2>
+          {(winnerName || proposalVotes.length > 0) && (
+            <div
+              id="result-report"
+              className="mt-6 bg-white p-6 rounded-xl shadow"
+            >
+              {winnerName && (
+                <h2 className="text-xl font-semibold text-center text-green-700">
+                  🏆 Winner: {winnerName}
+                </h2>
+              )}
+              {proposalVotes.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-lg font-semibold mb-2">🗳️ Vote Counts</h3>
+                  <ul className="space-y-2">
+                    {proposalVotes.map((p, idx) => (
+                      <li
+                        key={idx}
+                        className="bg-gray-100 p-3 rounded flex justify-between items-center"
+                      >
+                        <span>{p.name}</span>
+                        <span className="font-bold">{p.votes} vote(s)</span>
+                      </li>
+                    ))}
+                    <li className="mt-4 border-t pt-2 flex justify-between font-semibold text-blue-800">
+                      <span>Total Votes</span>
+                      <span>
+                        {proposalVotes.reduce((acc, p) => acc + p.votes, 0)}{" "}
+                        vote(s)
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>

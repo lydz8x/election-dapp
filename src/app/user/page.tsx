@@ -5,15 +5,15 @@ import useUserSession from "../../../hooks/useUserSession";
 import { supabase } from "@/lib/supabase";
 import { useWriteContract, useAccount } from "wagmi";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/lib/contract/contract";
+import { getAccount, getPublicClient } from "wagmi/actions";
+import { wagmiConfig } from "@/lib/wallet";
 
-const formatCountdown = (deadline: string) => {
-  const now = new Date();
-  const end = new Date(deadline.replace(" ", "T"));
-  if (isNaN(end.getTime())) return "Invalid date";
-  const diff = Math.max(0, end.getTime() - now.getTime());
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  return `${hours}h ${minutes}m left`;
+const formatCountdown = (seconds: number) => {
+  const s = Math.max(0, seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}h ${m}m ${sec}s left`;
 };
 
 type Election = {
@@ -32,13 +32,46 @@ type Candidate = {
 
 export default function UserDashboard() {
   const { user, loading } = useUserSession();
-  const { writeContractAsync, isPending, isSuccess, error } =
-    useWriteContract();
+  const { writeContractAsync } = useWriteContract();
   const { isConnected } = useAccount();
+
   const [elections, setElections] = useState<Election[]>([]);
   const [candidates, setCandidates] = useState<Record<string, Candidate[]>>({});
   const [votes, setVotes] = useState<Record<string, number>>({});
   const [voteCounts, setVoteCounts] = useState<Record<string, number[]>>({});
+  const [timeLeftMap, setTimeLeftMap] = useState<Record<number, number>>({});
+
+  const [pendingVoteElectionId, setPendingVoteElectionId] = useState<
+    string | null
+  >(null);
+  const [voteSuccessElectionId, setVoteSuccessElectionId] = useState<
+    string | null
+  >(null);
+  const [voteErrorElectionId, setVoteErrorElectionId] = useState<string | null>(
+    null
+  );
+
+  const publicClient = getPublicClient(wagmiConfig);
+  const account = getAccount(wagmiConfig);
+
+  const fetchTimeLefts = async (electionsData: Election[]) => {
+    try {
+      const updatedMap: Record<number, number> = {};
+      for (const election of electionsData) {
+        const secondsLeft = await publicClient.readContract({
+          abi: CONTRACT_ABI,
+          address: CONTRACT_ADDRESS,
+          functionName: "timeLeft",
+          args: [election.election_index],
+          account: account.address,
+        });
+        updatedMap[election.election_index] = Number(secondsLeft);
+      }
+      setTimeLeftMap(updatedMap);
+    } catch (error) {
+      console.error("Error fetching time left from contract:", error);
+    }
+  };
 
   const fetchData = async () => {
     if (!user) return;
@@ -100,6 +133,9 @@ export default function UserDashboard() {
         voteCountsMap[election.id] = counts;
       }
       setVoteCounts(voteCountsMap);
+
+      // fetch from smart contract
+      await fetchTimeLefts(electionsData || []);
     } catch (err) {
       console.error("Error loading user dashboard:", err);
     }
@@ -109,13 +145,39 @@ export default function UserDashboard() {
     fetchData();
   }, [user]);
 
-  const handleVote = async (electionId: string, proposalIndex: number) => {
-    if (!user) return;
+  useEffect(() => {
+    if (voteSuccessElectionId || voteErrorElectionId) {
+      const timeout = setTimeout(() => {
+        setVoteSuccessElectionId(null);
+        setVoteErrorElectionId(null);
+      }, 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [voteSuccessElectionId, voteErrorElectionId]);
 
-    if (!isConnected) {
-      alert("Please connect your wallet first.");
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeLeftMap((prev) => {
+        const updated: Record<number, number> = {};
+        for (const key in prev) {
+          const idx = parseInt(key);
+          updated[idx] = Math.max(0, prev[idx] - 1);
+        }
+        return updated;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleVote = async (electionId: string, proposalIndex: number) => {
+    if (!user || !isConnected) {
+      alert("Please connect your wallet.");
       return;
     }
+
+    setPendingVoteElectionId(electionId);
+    setVoteSuccessElectionId(null);
+    setVoteErrorElectionId(null);
 
     try {
       const selectedElection = elections.find((e) => e.id === electionId);
@@ -124,20 +186,20 @@ export default function UserDashboard() {
         return;
       }
 
-      const txHash = await writeContractAsync({
+      await writeContractAsync({
         abi: CONTRACT_ABI,
         address: CONTRACT_ADDRESS,
         functionName: "vote",
         args: [selectedElection.election_index, proposalIndex],
       });
 
-      console.log("Vote transaction sent:", txHash);
-      alert("Vote submitted! Check your wallet.");
-
-      await fetchData(); // ✅ Refresh data after voting
+      setVoteSuccessElectionId(electionId);
+      await fetchData();
     } catch (err) {
-      console.error("Smart contract voting failed: ", err);
-      alert("Failed to vote on chain.");
+      console.error("Smart contract voting failed:", err);
+      setVoteErrorElectionId(electionId);
+    } finally {
+      setPendingVoteElectionId(null);
     }
   };
 
@@ -157,13 +219,14 @@ export default function UserDashboard() {
         elections.map((election) => {
           const counts = voteCounts[election.id] || [];
           const maxVotes = Math.max(...counts);
+          const secondsLeft = timeLeftMap[election.election_index] || 0;
 
           return (
             <div key={election.id} className="mt-8 text-blue-700">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold mb-2">{election.title}</h2>
                 <span className="text-sm text-gray-500">
-                  {formatCountdown(election.deadline)}
+                  {formatCountdown(secondsLeft)}
                 </span>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -182,16 +245,14 @@ export default function UserDashboard() {
                       <h3 className="text-lg font-bold">{cand.name}</h3>
                       <p className="text-sm italic">Vision: {cand.vision}</p>
                       <p className="text-sm">Mission: {cand.mission}</p>
-                      <p className="mt-2 text-sm text-gray-600">
-                        {counts[index]} vote{counts[index] !== 1 ? "s" : ""}
-                      </p>
+
                       {isWinner && (
                         <span className="absolute top-2 right-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                           Leading
                         </span>
                       )}
                       <button
-                        disabled={alreadyVoted}
+                        disabled={alreadyVoted || secondsLeft === 0}
                         className={`mt-3 px-4 py-2 rounded-md text-white ${
                           votedFor
                             ? "bg-blue-600"
@@ -209,17 +270,17 @@ export default function UserDashboard() {
                   );
                 })}
                 <div className="col-span-full">
-                  {isPending && (
+                  {pendingVoteElectionId === election.id && (
                     <p className="text-sm text-blue-500 mt-2">
                       Waiting for transaction confirmation...
                     </p>
                   )}
-                  {isSuccess && (
+                  {voteSuccessElectionId === election.id && (
                     <p className="text-sm text-green-600 mt-2">
                       Vote successful! 🎉
                     </p>
                   )}
-                  {error && (
+                  {voteErrorElectionId === election.id && (
                     <p className="text-sm text-red-600 mt-2">Vote failed. ❌</p>
                   )}
                 </div>

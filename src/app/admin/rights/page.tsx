@@ -187,7 +187,7 @@ export default function AdminRightsPage() {
                         onClick={() =>
                           handleGrantRight(u.wallet_address!, u.id)
                         }
-                        className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
+                        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
                       >
                         Grant
                       </button>

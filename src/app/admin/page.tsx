@@ -135,6 +135,11 @@ export default function AdminDashboard() {
 
           image_url = supabase.storage.from("candidates").getPublicUrl(filePath)
             .data.publicUrl;
+        } else {
+          // Set default image if no file uploaded
+          image_url = supabase.storage
+            .from("candidates")
+            .getPublicUrl("default.png").data.publicUrl;
         }
 
         const { error: candidateError } = await supabase
